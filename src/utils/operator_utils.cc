@@ -8,9 +8,55 @@ Shape infer_broadcast(const Shape &A, const Shape &B) {
     // =================================== 作业 ===================================
     // TODO：对 A 和 B 进行双向广播，返回广播后的形状。
     // REF: https://github.com/onnx/onnx/blob/main/docs/Broadcasting.md
+    std::vector<int> nB(B);
+    std::vector<int> nA(A);
+    if(A.size() > B.size())
+    {
+        for(size_t i=0;i<(A.size()-B.size());i++)
+        {
+            nB.insert(nB.begin(), 1); 
+            // std::cout << "B" << std::endl;
+        }
+            
+    }
+    if(B.size() > A.size())
+    {
+        for(size_t i=0;i<(B.size()-A.size());i++)
+        {
+            nA.insert(nA.begin(), 1); 
+            // std::cout << "A" << std::endl;
+        }
+            
+    }
+    for(size_t i=0;i<nA.size();i++)
+    {
+        if(nA[i]==1)
+        {
+            nA[i] = nB[i];
+        }
+    }
+    // std::cout << "A:";
+    // for(size_t i=0;i<A.size();i++)
+    // {
+    //     std::cout << A[i] << " ";
+    // }
+    // std::cout << std::endl;
+
+    // std::cout << "B:";
+    // for(size_t i=0;i<B.size();i++)
+    // {
+    //     std::cout << B[i] << " ";
+    // }
+    // std::cout << std::endl;
+
+    // std::cout << "OUTPUT:";
+    // for(size_t i=0;i<nA.size();i++)
+    // {
+    //     std::cout << nA[i] << " ";
+    // }
+    // std::cout << std::endl;
     // =================================== 作业 ===================================
-    
-    return {};
+    return {nA};
 }
 
 int get_real_axis(const int &axis, const int &rank) {
