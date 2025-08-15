@@ -1,4 +1,5 @@
 #include "core/graph.h"
+#include "operators/matmul.h"
 #include <algorithm>
 #include <numeric>
 #include <queue>
@@ -105,6 +106,130 @@ namespace infini
         // 图优化规则如下：
         // 1. 去除冗余的算子（例如，两个相邻的算子都是 transpose 算子，且做的是相反的操作，可以将其全部删除）
         // 2. 合并算子（例如，矩阵乘算子中含有属性transA、transB，如果其输入存在transpose，且对最后两个维度做交换，就可以将transpose融入到矩阵乘算子的属性中去）
+        Operator last_opt;
+        // OpVec delop;
+        // TensorVec save_tensors;
+        for(size_t i = 0; i < ops.size();)
+        {
+            auto op = ops[i];
+            if(op->getOpType().underlying() == 10)
+            {
+                auto predecessors = op->getPredecessors();
+                for(auto predecessor : predecessors)
+                {
+                    if(predecessor->getOpType().underlying() == 10)
+                    {
+                        TensorVec Outputs = op->getOutputs();
+                        TensorVec Inputs = predecessor->getInputs();
+                        Tensor input = Inputs[0];
+                        Tensor output = Outputs[0];
+                        if(output->getDims() == input->getDims())
+                        {
+                            std::cout << "transpose delete" << std::endl;
+                            this->removeOperator(op);
+                            this->removeOperator(predecessor);
+                            this->removeTensor(op->getInputs()[0]);
+                            this->removeTensor(op->getOutputs()[0]);
+
+                            if (auto pred = input->getSource())
+                            {
+                                pred->removeSuccessors(predecessor);
+                                for (auto &succ : output->getTargets())
+                                {
+                                    pred->addSuccessors(succ);
+                                }
+                            }
+                            input->removeTarget(predecessor);
+                            for (auto &succ : output->getTargets())
+                            {
+                                input->addTarget(succ);
+                                succ->replaceInput(output, input);
+                                succ->removePredecessors(op);
+                                for (auto &predop : predecessor->getPredecessors())
+                                {
+                                    succ->addPredecessors(predop);
+                                }
+                            }
+                            i--;
+                            continue;
+                        }
+                    }
+                }                
+            }
+            else if(op->getOpType().underlying() == 7)
+            {
+                Tensor tensorA = op->getInputs()[0];
+                Tensor tensorB = op->getInputs()[1];
+                if(const auto &source = tensorA->getSource())
+                {
+                    if(source->getOpType().underlying() == 10)
+                    {
+                        Tensor input = source->getInputs()[0];
+                        Tensor output = source->getOutputs()[0];
+                        auto input_dim = input->getDims();
+                        auto output_dim = output->getDims();
+                        if(input_dim[input_dim.size()-1] == output_dim[output_dim.size()-2])
+                        {
+                            std::cout << "transpose merge A" << std::endl;
+                            Tensor input = source->getInputs()[0];
+                            Tensor output = source->getOutputs()[0];
+                            
+                            // update op info
+                            for (auto &predop : source->getPredecessors())
+                            {
+                                predop->removeSuccessors(source);
+                                predop->addSuccessors(op);
+                                op->removePredecessors(source);
+                                op->addPredecessors(predop);
+                            }  
+                            input->removeTarget(source);
+                            input->addTarget(op);
+                            op->replaceInput(output, input);   
+                            auto* matmulOp = dynamic_cast<MatmulObj*>(source.get());
+                            matmulOp->setTransA(true);
+                            continue;                  
+                        }
+                    }
+                }
+                if(const auto &source = tensorB->getSource())
+                {
+                    if(source->getOpType().underlying() == 10)
+                    {
+                        Tensor input = source->getInputs()[0];
+                        Tensor output = source->getOutputs()[0];
+                        auto input_dim = input->getDims();
+                        auto output_dim = output->getDims();
+                        if(input_dim[input_dim.size()-1] == output_dim[output_dim.size()-2])
+                        {
+                            std::cout << "transpose merge B" << std::endl;
+                            // std::cout << input << std::endl;
+                            Tensor input = source->getInputs()[0];
+                            Tensor output = source->getOutputs()[0];
+                            // update op info
+                            op->removePredecessors(source);
+                            for (auto &predop : source->getPredecessors())
+                            {
+                                predop->removeSuccessors(source);
+                                predop->addSuccessors(op);
+                                op->addPredecessors(predop);
+                            }  
+                            input->removeTarget(source);
+                            input->addTarget(op);
+                            op->replaceInput(output, input);  
+                            auto* matmulOp = dynamic_cast<MatmulObj*>(op.get());
+                            matmulOp->setTransB(true);
+                            this->removeOperator(source);
+                            this->removeTensor(output);
+                            // this->print();
+                            continue;                  
+                        }
+                    }
+                }
+            }
+            i++;
+        }
+        std::cout << "Optimize complete!" << std::endl << std::endl;
+
         // =================================== 作业 ===================================
     }
 
@@ -151,6 +276,23 @@ namespace infini
         // =================================== 作业 ===================================
         // TODO：利用 allocator 给计算图分配内存
         // HINT: 获取分配好的内存指针后，可以调用 tensor 的 setDataBlob 函数给 tensor 绑定内存
+        // Naive Version
+        std::unordered_map<std::shared_ptr<infini::TensorObj>, size_t> tensorToOffset;
+        for(auto tensor : tensors)
+        {
+            tensorToOffset[tensor] = allocator.alloc(tensor->getBytes());
+            // std::cout << "loop1end" << std::endl;
+        }
+        for(auto tensor : tensors)
+        {
+            tensor->setDataBlob(make_ref<BlobObj>
+                (
+                    tensor->runtime,
+                    static_cast<uint8_t *>(allocator.getPtr()) +
+                        tensorToOffset[tensor]
+                )
+            );
+        }
         // =================================== 作业 ===================================
 
         allocator.info();

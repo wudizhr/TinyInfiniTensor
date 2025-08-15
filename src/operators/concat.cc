@@ -1,17 +1,20 @@
 #include "operators/concat.h"
 #include "utils/operator_utils.h"
+#include "core/graph.h"
 
 namespace infini {
 ConcatObj::ConcatObj(GraphObj *graph, TensorVec inputs, Tensor output, int _dim)
     : OperatorObj(OpType::Concat, inputs, {output}) {
+        // TensorVec a = {nullptr};
+        // std::cout << "outputsize:"  << a.size() << std::endl; //这个空元素竟然也会size+1
     int rank = inputs[0]->getRank();
     dim = get_real_axis(_dim, rank);
-    IT_ASSERT(checkValid(graph));
+    IT_ASSERT(checkValid(graph)); //outputs established in here
 }
 
 optional<vector<Shape>> ConcatObj::inferShape(const TensorVec &inputs) {
     Shape dims = inputs[0]->getDims();
-    Shape dims_h = inputs[1]->getDims();
+    Shape ans = inputs[0]->getDims();
     auto rank = inputs[0]->getRank();
 
     // =================================== 作业 ===================================
@@ -19,15 +22,18 @@ optional<vector<Shape>> ConcatObj::inferShape(const TensorVec &inputs) {
     // REF: https://onnx.ai/onnx/operators/onnx__Concat.html#concat-13
     for(size_t i = 0;i < rank;i++)
     {
-        if(dims[i]!=dims_h[i])
+        for(size_t j = 1;j < inputs.size();j++)
         {
-            dims[i] += dims_h[i];
-            break;
+            // inputs[j]->print();
+            if(dims[i] != inputs[j]->getDims()[i])
+            {
+                ans[i] += inputs[j]->getDims()[i];
+            }     
         }
     }
     // =================================== 作业 ===================================
 
-    return {{dims}};
+    return {{ans}};
 }
 
 std::string ConcatObj::toString() const {
