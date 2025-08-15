@@ -14,10 +14,12 @@ TEST(Concat, NativeCpu) {
     auto t2 = g->addTensor({2, 2, 1, 1}, DataType::Float32);
     auto t3 = g->addTensor({2, 2, 2, 1}, DataType::Float32);
     auto op = g->addOp<ConcatObj>(TensorVec{t1, t2, t3}, nullptr, 2);
+    g->print();
     g->dataMalloc();
     t1->setData(IncrementalGenerator());
     t2->setData(OneGenerator());
     t3->setData(OneGenerator());
+    g->print();
 
     runtime->run(g);
     EXPECT_TRUE(op->getOutput()->equalData(

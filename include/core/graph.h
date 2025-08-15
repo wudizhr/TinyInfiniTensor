@@ -58,14 +58,16 @@ namespace infini
         void dataMalloc();
 
         /**
-         * @brief Add an operator and create its outputs. Output tensor arguments
+         * @brief Add an operator and create its outputs. Output tensor arguments should be empty Refs (e.g., nullptr).
          * should be empty Refs (e.g., nullptr).
          */
         template <typename T, typename... Args>
         Ref<T> addOp(Args &&...args)
         {
             Ref<T> op = infini::make_ref<T>(this, std::forward<Args>(args)...);
+            // this->print();
             addOperatorAndConnect(op);
+            // this->print();
             return op;
         }
 
